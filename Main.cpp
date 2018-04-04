@@ -32,8 +32,8 @@ int main(int argc, char *argv[]){
     vector<int> *lowerBound;
     vector<int> *higherBound;
 
-    sprintf(name, "Instancias/%s", argv[1]);
-    openFile(&file_in, name);
+    sprintf(name, "../Instancias/%s", argv[1]);
+    if (!openFile(&file_in, name)) cout<<"Cant open file"<<endl;
     getFirstLine(&file_in, &N, &M, &K);
     vector<List> graph(N);
 
@@ -48,7 +48,7 @@ int openFile(FILE **file_in, char* name){
 	if ((*file_in) = fopen(name, "r")){
 		return 1;
 	}
-	return 0;
+    return 0;
 }
 
 void printAdjList(vector<List> graph){

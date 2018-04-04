@@ -1,0 +1,4 @@
+/home/bernardo/clion-2017.3.4/bin/cmake/bin/cmake -DCMAKE_BUILD_TYPE=Debug -G "CodeBlocks - Unix Makefiles" "/home/bernardo/Desktop/bernardo/UFOP/Otimizacao em Redes/PCC173-TP-master"
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/bernardo/Desktop/bernardo/UFOP/Otimizacao em Redes/PCC173-TP-master/cmake-build-debug

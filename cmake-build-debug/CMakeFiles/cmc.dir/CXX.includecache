@@ -1,0 +1,22 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/bernardo/Desktop/bernardo/UFOP/Otimizacao em Redes/PCC173-TP-master/Main.cpp
+chrono
+-
+iostream
+-
+string
+-
+vector
+-
+time.h
+-
+stdlib.h
+/home/bernardo/Desktop/bernardo/UFOP/Otimizacao em Redes/PCC173-TP-master/stdlib.h
+
