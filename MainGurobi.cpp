@@ -4,22 +4,33 @@
 #include <sstream>
 #include <vector>
 #include <time.h>
+#include <stdio.h>
+#include <string.h>
+#include <chrono>
 #include "stdlib.h"
+#include "gurobi_c++.h"
 using namespace std;
+using namespace std::chrono;
 
 #define OITO_DEITADO 999999;
 
+string itos(int i) {
+    stringstream s; s << i;
+    return s.str();
+}
+
 struct Arco{
     int custo;
-    vector<int> consumo;
+    int *consumo;
 };
 
 int abrirArquivo(FILE**, char*);
 void lerArquivo(FILE **file_in, Arco ***adjacencia, int ***consumo, int *N, int *M, int *K, int **limitesInferiores, int **limitesSuperiores);
-void imprimirMatriz(Arco **adjacencia, int N);
+void imprimirMatriz(Arco **adjacencia, int N, int K);
 void deletarEstruturas(Arco ***adjacencia, int ***consumo, int **limitesInferiores, int **limitesSuperiores, int *N, int *K);
 
 int main(int argc, char *argv[]){
+    duration<double> time_span2;
     Arco **adjacencia; // matriz de adjacencia
     int **consumo; // matriz de consumo de recursos dos arcos
 
@@ -40,8 +51,148 @@ int main(int argc, char *argv[]){
 
     fclose(file_in);
 
-    imprimirMatriz(adjacencia, N);
+    high_resolution_clock::time_point t1 = high_resolution_clock::now();
+    //imprimirMatriz(adjacencia, N, K);
 
+    // cria ambiente guronbe
+
+    GRBEnv *env = NULL;
+
+    // adiciona variaveis ao modelo
+    GRBVar **vars = NULL;
+
+    vars = new GRBVar*[N];
+    for (int i = 0; i < N; i++) {
+        vars[i] = new GRBVar[N];
+    }
+
+    try {
+        env = new GRBEnv();
+        GRBModel model = GRBModel(*env);
+
+        model.set(GRB_IntParam_LazyConstraints, 1);
+
+        // adiciona variaveis de decisao ao modelo
+        for(int i = 1; i < N; i++){
+            for(int j = 1; j < N; j++){
+                vars[i][j] = model.addVar(0.0, 1.0, adjacencia[i][j].custo, GRB_BINARY, itos(i)+">"+itos(j));
+            }
+        }
+        model.update();
+
+        // cria expressao linear que representa a funcao objetivo
+        GRBLinExpr fo = 0;
+        for(int i = 1; i < N; i++){
+            for(int j = 1; j < N; j++){
+                fo += model.getVarByName(itos(i)+">"+itos(j)) * adjacencia[i][j].custo;
+            }
+        }
+
+        // define a função objetivo como sendo de minimização e a adiciona ao modelo
+        model.setObjective(fo, GRB_MINIMIZE);
+
+        model.update();
+
+        // restricoes
+
+        // restricao de limite de recursos
+        for(int b = 0; b < K ; b++){
+            GRBLinExpr consumido = 0;
+            for (int i = 1; i < N; i++){
+                for (int j = 1; j < N; j++){
+                    consumido += model.getVarByName(itos(i)+">"+itos(j)) * (consumo[j][b] + adjacencia[i][j].consumo[b]);
+                }
+            }
+            model.addConstr(consumido >= limitesInferiores[b], "Gasto minimo de recursos");
+            model.addConstr(consumido <= limitesSuperiores[b], "Gasto maximo de recursos");
+        }
+
+        // restricao que obriga a comecar do primeiro vertice
+        GRBLinExpr somatorio = 0;
+        for(int i = 1; i < N; i++){
+            somatorio += model.getVarByName(itos(1)+">"+itos(i));
+        }
+        model.addConstr(somatorio == 1, "Comeca no vertice 1");
+
+        // restricao que obriga a terminar no ultimo vertice
+        somatorio = 0;
+        for(int i = 1; i < N; i++){
+            somatorio += model.getVarByName(itos(i)+">"+itos(N-1));
+        }
+        model.addConstr(somatorio == 1, "Termina no vertice N-1");
+        model.update();
+
+        // restricao de conservacao de fluxo
+        for(int k = 2; k < N-1; k++){
+            GRBLinExpr somatorio_i = 0;
+            GRBLinExpr somatorio_j = 0;
+            for(int i = 1; i < N; i++){
+                somatorio_i += model.getVarByName(itos(i)+">"+itos(k));
+            }
+            for(int j = 1; j < N; j++){
+                somatorio_j += model.getVarByName(itos(k)+">"+itos(j));
+            }
+            model.addConstr((somatorio_i - somatorio_j) == 0, "Conservacao de fluxo " + itos(k));
+
+        }
+
+        model.update();
+        model.optimize();
+
+        //Verifica o status do modelo
+        int status = model.get(GRB_IntAttr_Status);
+
+        //Imprime o status do modelo
+        if (status == GRB_UNBOUNDED)
+        {
+            cout << "O modelo nao pode ser resolvido porque e ilimitado" << endl;
+            return 0;
+        }
+        if (status == GRB_OPTIMAL)
+        {
+            cout << "Solucao otima encontrada!" << endl;
+            //Acessa e imprime o valor da funcao objetivo
+            cout << "O valor da solucao otima e: " << model.get(GRB_DoubleAttr_ObjVal) << endl;
+        }
+        if (status == GRB_INFEASIBLE)
+        {
+            cout << "O modelo nao pode ser resolvido porque e inviavel" << endl;
+            return 0;
+        }
+
+        //Acessa as variáveis do modelo depois de resolvido
+        GRBVar* v = model.getVars();
+        char varname[100];
+
+        cout<<"Arcos escolhidos, custo do arco e custo do vertice de chegada do arco"<<endl;
+        //De maneira alternativa, imprime o valor de cada uma das variáveis
+        for (int index = 0; index < model.get(GRB_IntAttr_NumVars); ++index) {
+            double sol = v[index].get(GRB_DoubleAttr_X);
+
+            sscanf(v[index].get(GRB_StringAttr_VarName).c_str(), "%s", varname);
+            if(sol == 1){
+                char *i_c = strtok(varname, ">");
+                char *j_c = strtok(NULL, ">");
+                int i = atoi(i_c);
+                int j = atoi(j_c);
+                cout<<i<<" "<<j<<" ";
+                for (int k=0;k<K;k++){
+                    cout<<adjacencia[i][j].consumo[k]<<" "<<consumo[j][k]<<" ";
+                }
+                cout<<endl;
+                //printf("%s = %.2lf\n", varname, sol);
+            }
+        }
+
+    } catch (GRBException e) {
+        cout << "Erro numero: " << e.getErrorCode() << endl;
+        cout << e.getMessage() << endl;
+    } catch (...) {
+        cout << "Erro durante a construcao ou solucao do modelo" << endl;
+    }
+    high_resolution_clock::time_point t2 = high_resolution_clock::now();
+    time_span2 = duration_cast<duration<double>>(t2-t1);
+    cout<<"Tempo total de programa: "<<time_span2.count()<<endl;
     return 0;
 }
 
@@ -63,6 +214,9 @@ void lerArquivo(FILE **file_in, Arco ***adjacencia, int ***consumo, int *N, int 
     (*adjacencia) = new Arco *[(*N)];
     for(int i = 1; i < *N; i++){
         (*adjacencia)[i] = new Arco[(*N)];
+        for(int j = 1; j < *N; j++){
+            (*adjacencia)[i][j].consumo = new int[*K];
+        }
     }
 
     // inicializa matriz com custos maximos
@@ -109,41 +263,30 @@ void lerArquivo(FILE **file_in, Arco ***adjacencia, int ***consumo, int *N, int 
         }
         fscanf(*file_in, "%[\n]", &enter);
     }
+
     // leitura dos arcos
-    // for(int i = 0; i < 78; i++){
-    //     fscanf(*file_in, "%d %d %d", &v1, &v2, &tmp);
-    //     for(int j = 0; j < (*K); j++){
-    //         fscanf(*file_in, "%d", &tmp);
-    //     }
-    // }
     for(int i = 0; i < (*M); i++){
         fscanf(*file_in, "%d %d %d", &v1, &v2, &tmp);
+
         // adiciona peso ao arco (v1 > v2)
         (*adjacencia)[v1][v2].custo = tmp;
-        (*adjacencia)[v1][v2].consumo.resize(*K);
-        cout << i << " ";
-        // cout << v1 << " " << v2 << " " << tmp << " ";
+
         // adiciona consumo de recursos ao arco (v1 > v2)
         for(int j = 0; j < (*K); j++){
             fscanf(*file_in, "%d", &tmp);
-            // cout << tmp << " ";
             (*adjacencia)[v1][v2].consumo[j] = tmp;
         }
-        // cout << (*adjacencia)[79][36].custo << endl;
-        // cout << endl;
         fscanf(*file_in, "%[\n]", &enter);
     }
-    cout << __LINE__ << endl;
 }
 
-void imprimirMatriz(Arco **adjacencia, int N){
+void imprimirMatriz(Arco **adjacencia, int N, int K){
     for(int i = 1; i < (N); i++){
         for(int j = 1; j < (N); j++){
             if (adjacencia[i][j].custo != 999999){
-                cout << i << "\t" << j << "\t" << adjacencia[i][j].custo << "\t" << adjacencia[i][j].consumo.size();
-                // for(int l = 0; l < adjacencia[i][j].consumo.size(); l++){
-                //     cout << adjacencia[i][j].consumo[l];
-                // }
+                for(int l = 0; l < K; l++){
+                    cout << adjacencia[i][j].consumo[l];
+                }
                 cout << endl;
             }
         }

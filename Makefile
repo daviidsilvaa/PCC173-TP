@@ -1,6 +1,6 @@
 all: *.cpp
-	g++ -o cmc Main.cpp -std=c++11
+	g++ -std=c++11 MainGurobi.cpp -o executable -I/home/david/gurobi801/linux64/include -L/home/david/gurobi801/linux64/lib -lgurobi_c++ -lgurobi80
+
 
 run:
-	./cmc 1.txt
-
+	./executable Instancias/1.txt

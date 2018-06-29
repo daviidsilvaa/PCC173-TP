@@ -1,3 +1,0 @@
-/home/bernardo/Desktop/bernardo/UFOP/Otimizacao em Redes/PCC173-TP-master/cmake-build-debug/CMakeFiles/rebuild_cache.dir
-/home/bernardo/Desktop/bernardo/UFOP/Otimizacao em Redes/PCC173-TP-master/cmake-build-debug/CMakeFiles/edit_cache.dir
-/home/bernardo/Desktop/bernardo/UFOP/Otimizacao em Redes/PCC173-TP-master/cmake-build-debug/CMakeFiles/cmc.dir
