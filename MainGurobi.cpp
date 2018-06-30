@@ -12,7 +12,7 @@
 using namespace std;
 using namespace std::chrono;
 
-#define OITO_DEITADO 999999;
+#define INF 999999;
 
 string itos(int i) {
     stringstream s; s << i;
@@ -25,7 +25,7 @@ struct Arco{
 };
 
 int abrirArquivo(FILE**, char*);
-void lerArquivo(FILE **file_in, Arco ***adjacencia, int ***consumo, int *N, int *M, int *K, int **limitesInferiores, int **limitesSuperiores);
+void lerArquivo(FILE **arq_entrada, Arco ***adjacencia, int ***consumo, int *N, int *M, int *K, int **limitesInferiores, int **limitesSuperiores);
 void imprimirMatriz(Arco **adjacencia, int N, int K);
 void deletarEstruturas(Arco ***adjacencia, int ***consumo, int **limitesInferiores, int **limitesSuperiores, int *N, int *K);
 
@@ -34,27 +34,28 @@ int main(int argc, char *argv[]){
     Arco **adjacencia; // matriz de adjacencia
     int **consumo; // matriz de consumo de recursos dos arcos
 
-    FILE *file_in; // arquivo de entrada de dados
+    FILE *arq_entrada; // arquivo de entrada de dados
     int N, // numero de vertices
     M, // numero de arcos
     K; // numero de recursos
     int *limitesInferiores; // limites inferiores de recursos
     int *limitesSuperiores; // limites superiores de recursos
 
-    if(!abrirArquivo(&file_in, argv[1])){
+    if(!abrirArquivo(&arq_entrada, argv[1])){
         cout << "Cant open file" << endl;
 
         return 0;
     }
 
-    lerArquivo(&file_in, &adjacencia, &consumo, &N, &M, &K, &limitesInferiores, &limitesSuperiores);
+    lerArquivo(&arq_entrada, &adjacencia, &consumo, &N, &M, &K, &limitesInferiores, &limitesSuperiores);
 
-    fclose(file_in);
+    fclose(arq_entrada);
 
     high_resolution_clock::time_point t1 = high_resolution_clock::now();
+
     //imprimirMatriz(adjacencia, N, K);
 
-    // cria ambiente guronbe
+    // cria ambiente gurobi
 
     GRBEnv *env = NULL;
 
@@ -120,7 +121,6 @@ int main(int argc, char *argv[]){
             somatorio += model.getVarByName(itos(i)+">"+itos(N-1));
         }
         model.addConstr(somatorio == 1, "Termina no vertice N-1");
-        model.update();
 
         // restricao de conservacao de fluxo
         for(int k = 2; k < N-1; k++){
@@ -164,7 +164,7 @@ int main(int argc, char *argv[]){
         GRBVar* v = model.getVars();
         char varname[100];
 
-        cout<<"Arcos escolhidos, custo do arco e custo do vertice de chegada do arco"<<endl;
+        cout<<"Arcos escolhidos, consumos dos arcos e dos vertices no caminho"<<endl;
         //De maneira alternativa, imprime o valor de cada uma das variáveis
         for (int index = 0; index < model.get(GRB_IntAttr_NumVars); ++index) {
             double sol = v[index].get(GRB_DoubleAttr_X);
@@ -196,18 +196,18 @@ int main(int argc, char *argv[]){
     return 0;
 }
 
-int abrirArquivo(FILE **file_in, char* path){
-    if ((*file_in) = fopen(path, "r")){
+int abrirArquivo(FILE **arq_entrada, char* path){
+    if ((*arq_entrada) = fopen(path, "r")){
         return 1;
     }
     return 0;
 }
 
-void lerArquivo(FILE **file_in, Arco ***adjacencia, int ***consumo, int *N, int *M, int *K, int **limitesInferiores, int **limitesSuperiores){
+void lerArquivo(FILE **arq_entrada, Arco ***adjacencia, int ***consumo, int *N, int *M, int *K, int **limitesInferiores, int **limitesSuperiores){
     char enter;
 
     // le N, M e K do arquivo de entrada
-    fscanf(*file_in, "%d %d %d %[\n]", N, M, K, &enter);
+    fscanf(*arq_entrada, "%d %d %d %[\n]", N, M, K, &enter);
     (*N)++;
 
     // instancia a matriz de adjacencia
@@ -222,7 +222,7 @@ void lerArquivo(FILE **file_in, Arco ***adjacencia, int ***consumo, int *N, int 
     // inicializa matriz com custos maximos
     for(int i = 1; i < (*N); i++){
         for(int j = 1; j < (*N); j++){
-            (*adjacencia)[i][j].custo = OITO_DEITADO;
+            (*adjacencia)[i][j].custo = INF;
         }
     }
 
@@ -241,42 +241,43 @@ void lerArquivo(FILE **file_in, Arco ***adjacencia, int ***consumo, int *N, int 
 
     // le limites inferiores do arquivo de entrada
     for(int i = 0; i < (*K); i++){
-        fscanf(*file_in, "%d", &tmp);
+        fscanf(*arq_entrada, "%d", &tmp);
         (*limitesInferiores)[i] = tmp;
     }
+    cout<<endl;
 
-    fscanf(*file_in, "%[\n]", &enter);
+    fscanf(*arq_entrada, "%[\n]", &enter);
 
     // le limites superiores do arquivo de entrada
     for(int i = 0; i < (*K); i++){
-        fscanf(*file_in, "%d", &tmp);
+        fscanf(*arq_entrada, "%d", &tmp);
         (*limitesSuperiores)[i] = tmp;
     }
 
-    fscanf(*file_in, "%[\n]", &enter);
+    fscanf(*arq_entrada, "%[\n]", &enter);
 
     // le consumos dos vertices
     for(int i = 1; i < (*N); i++){
         for(int j = 0; j < (*K); j++){
-            fscanf(*file_in, "%d", &tmp);
+            fscanf(*arq_entrada, "%d", &tmp);
             (*consumo)[i][j] = tmp;
         }
-        fscanf(*file_in, "%[\n]", &enter);
+        fscanf(*arq_entrada, "%[\n]", &enter);
     }
 
     // leitura dos arcos
     for(int i = 0; i < (*M); i++){
-        fscanf(*file_in, "%d %d %d", &v1, &v2, &tmp);
+        fscanf(*arq_entrada, "%d %d %d", &v1, &v2, &tmp);
 
         // adiciona peso ao arco (v1 > v2)
         (*adjacencia)[v1][v2].custo = tmp;
 
         // adiciona consumo de recursos ao arco (v1 > v2)
         for(int j = 0; j < (*K); j++){
-            fscanf(*file_in, "%d", &tmp);
+            fscanf(*arq_entrada, "%d", &tmp);
             (*adjacencia)[v1][v2].consumo[j] = tmp;
         }
-        fscanf(*file_in, "%[\n]", &enter);
+        fscanf(*arq_entrada, "%[\n]", &enter);
     }
 }
 
