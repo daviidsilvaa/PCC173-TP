@@ -6,18 +6,22 @@
 #include <time.h>
 #include <stdio.h>
 #include <string.h>
-#include <chrono>
 #include "stdlib.h"
 #include "gurobi_c++.h"
 using namespace std;
 using namespace std::chrono;
 
-#define INF 999999;
+#define INF 999999
 
 string itos(int i) {
     stringstream s; s << i;
     return s.str();
 }
+
+struct Tupla{
+	int i;
+	int j;
+};
 
 struct Arco{
     int custo;
@@ -42,7 +46,7 @@ int main(int argc, char *argv[]){
     int *limitesSuperiores; // limites superiores de recursos
 
     if(!abrirArquivo(&arq_entrada, argv[1])){
-        cout << "Cant open file" << endl;
+        cout << "Nao foi possivel abrir o arquivo!" << endl;
 
         return 0;
     }
@@ -53,13 +57,10 @@ int main(int argc, char *argv[]){
 
     high_resolution_clock::time_point t1 = high_resolution_clock::now();
 
-    //imprimirMatriz(adjacencia, N, K);
-
     // cria ambiente gurobi
-
     GRBEnv *env = NULL;
 
-    // adiciona variaveis ao modelo
+    // cria variaveis do modelo
     GRBVar **vars = NULL;
 
     vars = new GRBVar*[N];
@@ -76,7 +77,11 @@ int main(int argc, char *argv[]){
         // adiciona variaveis de decisao ao modelo
         for(int i = 1; i < N; i++){
             for(int j = 1; j < N; j++){
-                vars[i][j] = model.addVar(0.0, 1.0, adjacencia[i][j].custo, GRB_BINARY, itos(i)+">"+itos(j));
+				if(adjacencia[i][j].custo != INF){
+					vars[i][j] = model.addVar(0.0, 1.0, adjacencia[i][j].custo, GRB_BINARY, itos(i) + ">" + itos(j));
+				} else {
+					vars[i][j] = model.addVar(0.0, 0.0, adjacencia[i][j].custo, GRB_INTEGER, itos(i) + ">" + itos(j));
+				}
             }
         }
         model.update();
@@ -101,7 +106,7 @@ int main(int argc, char *argv[]){
             GRBLinExpr consumido = 0;
             for (int i = 1; i < N; i++){
                 for (int j = 1; j < N; j++){
-                    consumido += model.getVarByName(itos(i)+">"+itos(j)) * (consumo[j][b] + adjacencia[i][j].consumo[b]);
+                    consumido += model.getVarByName(itos(i) + ">" + itos(j)) * (consumo[j][b] + adjacencia[i][j].consumo[b]);
                 }
             }
             model.addConstr(consumido >= limitesInferiores[b], "Gasto minimo de recursos");
@@ -127,10 +132,10 @@ int main(int argc, char *argv[]){
             GRBLinExpr somatorio_i = 0;
             GRBLinExpr somatorio_j = 0;
             for(int i = 1; i < N; i++){
-                somatorio_i += model.getVarByName(itos(i)+">"+itos(k));
+                somatorio_i += model.getVarByName(itos(i) + ">" + itos(k));
             }
             for(int j = 1; j < N; j++){
-                somatorio_j += model.getVarByName(itos(k)+">"+itos(j));
+                somatorio_j += model.getVarByName(itos(k) + ">" + itos(j));
             }
             model.addConstr((somatorio_i - somatorio_j) == 0, "Conservacao de fluxo " + itos(k));
 
@@ -143,20 +148,17 @@ int main(int argc, char *argv[]){
         int status = model.get(GRB_IntAttr_Status);
 
         //Imprime o status do modelo
-        if (status == GRB_UNBOUNDED)
-        {
+        if (status == GRB_UNBOUNDED){
             cout << "O modelo nao pode ser resolvido porque e ilimitado" << endl;
             return 0;
         }
-        if (status == GRB_OPTIMAL)
-        {
+        if (status == GRB_OPTIMAL){
             cout << "Solucao otima encontrada!" << endl;
             //Acessa e imprime o valor da funcao objetivo
             cout << "O valor da solucao otima e: " << model.get(GRB_DoubleAttr_ObjVal) << endl;
         }
-        if (status == GRB_INFEASIBLE)
-        {
-            cout << "O modelo nao pode ser resolvido porque e inviavel" << endl;
+        if (status == GRB_INFEASIBLE){
+            cout << "O modelo nao pode ser resolvido, porque e inviavel" << endl;
             return 0;
         }
 
@@ -164,25 +166,39 @@ int main(int argc, char *argv[]){
         GRBVar* v = model.getVars();
         char varname[100];
 
-        cout<<"Arcos escolhidos, consumos dos arcos e dos vertices no caminho"<<endl;
+
+		// estrutura que armazena o caminho resultado
+		vector<Tupla> caminho;
+		Tupla tupla_auxiliar;
+
         //De maneira alternativa, imprime o valor de cada uma das variáveis
         for (int index = 0; index < model.get(GRB_IntAttr_NumVars); ++index) {
             double sol = v[index].get(GRB_DoubleAttr_X);
 
             sscanf(v[index].get(GRB_StringAttr_VarName).c_str(), "%s", varname);
+			// caso a variavel tenha sido usada na solucao
             if(sol == 1){
                 char *i_c = strtok(varname, ">");
                 char *j_c = strtok(NULL, ">");
                 int i = atoi(i_c);
                 int j = atoi(j_c);
-                cout<<i<<" "<<j<<" ";
-                for (int k=0;k<K;k++){
-                    cout<<adjacencia[i][j].consumo[k]<<" "<<consumo[j][k]<<" ";
-                }
-                cout<<endl;
-                //printf("%s = %.2lf\n", varname, sol);
+				tupla_auxiliar.i = i;
+				tupla_auxiliar.j = j;
+				// empilhamos a Tupla de vertices num vetor que armazena o caminho resultado
+				caminho.push_back(tupla_auxiliar);
             }
         }
+
+		cout << "Vertices que compoem o caminho solucao: 1 ";
+		for(int i = 0; i < caminho.size(); i++){
+			for(int j = 0; j < caminho.size(); j++){
+				if(caminho[i].j == caminho[j].i){
+					cout << caminho[i].j << " ";
+				}
+			}
+		}
+
+		cout << "100" << endl;
 
     } catch (GRBException e) {
         cout << "Erro numero: " << e.getErrorCode() << endl;
@@ -192,7 +208,7 @@ int main(int argc, char *argv[]){
     }
     high_resolution_clock::time_point t2 = high_resolution_clock::now();
     time_span2 = duration_cast<duration<double>>(t2-t1);
-    cout<<"Tempo total de programa: "<<time_span2.count()<<endl;
+    cout << "Tempo total gasto: " << time_span2.count() << "s" << endl;
     return 0;
 }
 
@@ -236,8 +252,8 @@ void lerArquivo(FILE **arq_entrada, Arco ***adjacencia, int ***consumo, int *N, 
     Arco edge_tmp;
 
     // vetores de limites inferios e superiores do problema
-    (*limitesInferiores) = new int((*K));
-    (*limitesSuperiores) = new int((*K));
+    (*limitesInferiores) = new int[(*K)];
+    (*limitesSuperiores) = new int[(*K)];
 
     // le limites inferiores do arquivo de entrada
     for(int i = 0; i < (*K); i++){
@@ -284,7 +300,7 @@ void lerArquivo(FILE **arq_entrada, Arco ***adjacencia, int ***consumo, int *N, 
 void imprimirMatriz(Arco **adjacencia, int N, int K){
     for(int i = 1; i < (N); i++){
         for(int j = 1; j < (N); j++){
-            if (adjacencia[i][j].custo != 999999){
+            if (adjacencia[i][j].custo != INF){
                 for(int l = 0; l < K; l++){
                     cout << adjacencia[i][j].consumo[l];
                 }
