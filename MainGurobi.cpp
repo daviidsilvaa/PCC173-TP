@@ -1,7 +1,10 @@
+#define _CRT_SECURE_NO_WARNINGS
+
 #include <chrono>
 #include <iostream>
 #include <string>
 #include <sstream>
+#include <fstream>
 #include <vector>
 #include <time.h>
 #include <stdio.h>
@@ -14,8 +17,8 @@ using namespace std::chrono;
 #define INF 999999
 
 string itos(int i) {
-    stringstream s; s << i;
-    return s.str();
+	stringstream s; s << i;
+	return s.str();
 }
 
 struct Tupla{
@@ -212,11 +215,11 @@ int main(int argc, char *argv[]){
     return 0;
 }
 
-int abrirArquivo(FILE **arq_entrada, char* path){
-    if ((*arq_entrada) = fopen(path, "r")){
-        return 1;
-    }
-    return 0;
+int abrirArquivo(FILE **arq_entrada, char* path) {
+	if ((*arq_entrada) = fopen(path, "r")) {
+		return 1;
+	}
+	return 0;
 }
 
 void lerArquivo(FILE **arq_entrada, Arco ***adjacencia, int ***consumo, int *N, int *M, int *K, int **limitesInferiores, int **limitesSuperiores){
@@ -310,18 +313,18 @@ void imprimirMatriz(Arco **adjacencia, int N, int K){
     }
 }
 
-void deletarEstruturas(Arco ***adjacencia, int ***consumo, int **limitesInferiores, int **limitesSuperiores, int N, int K){
-    for(int i = 0; i < N; i++){
-        delete (*adjacencia)[i];
-    }
-    delete (**adjacencia);
+void deletarEstruturas(Arco ***adjacencia, int ***consumo, int **limitesInferiores, int **limitesSuperiores, int N, int K) {
+	for (int i = 0; i < N; i++) {
+		delete (*adjacencia)[i];
+	}
+	delete (**adjacencia);
 
-    for(int i = 0; i < N; i++){
-        delete (*consumo)[i];
-    }
-    delete (**consumo);
+	for (int i = 0; i < N; i++) {
+		delete (*consumo)[i];
+	}
+	delete (**consumo);
 
-    delete (*limitesInferiores);
-    delete (*limitesSuperiores);
+	delete (*limitesInferiores);
+	delete (*limitesSuperiores);
 
 }
